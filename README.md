@@ -17,7 +17,7 @@ This repository contains a collection of shell (bash) scripts for various automa
 **How to Use:**
 1. Clone this repository:
    ```bash
-   git clone https://github.com/username/shell-script-collection.git
+   git clone https://github.com/benedict-erwin/shell-script-collection.git
    ```
 2. Navigate to the desired script directory.
 3. Run the script using:
