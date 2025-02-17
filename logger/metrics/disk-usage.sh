@@ -13,7 +13,7 @@
 #
 # Output Format:
 # {
-#     "time": "2025-02-17T08:07:01.672543199Z",
+#     "time": "2024-10-03T08:07:01.672543199Z",
 #     "level": "INFO",
 #     "msg": "disk usage information",
 #     "namespace": "YOUR-NAMESPACE",
