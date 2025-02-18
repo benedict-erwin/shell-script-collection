@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # Script Name: curl-with-retry.sh
-# Description: HTTP client with auto-retry mechanism for OpenLibrary or other API with JSON response. 
+# Description: HTTP client with an auto-retry mechanism for OpenLibrary or other API with JSON response. 
 #              Performs JSON validation and exponential backoff retry strategy.
 #
 # Usage: ./curl-with-retry.sh
 #
 # Dependency:
 # - jq (for JSON formatting)
-#   Install it using the command: sudo apt-get install curl jq (Ubuntu/Debian) or sudo yum install curl jq (CentOS/RHEL)
+#   Install it using the command: sudo apt-get install jq (Ubuntu/Debian) or sudo yum install jq (CentOS/RHEL)
 #
 # Author: Benedict E. Pranata
 # Version: 1.0
