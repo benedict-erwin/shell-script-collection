@@ -26,6 +26,7 @@ fi
 # [CONFIGURATION]
 TARGET_URL="httpss://openlibrary.org/works/OL45804W/editions.json"
 OUTPUT_FILE="editions.json"
+TEMP_FILE="/tmp/editions.json"
 MAX_RETRIES=3
 RETRY_DELAY=3    # Base delay in seconds (exponential backoff)
 HTTP_TIMEOUT=30  # Connection timeout in seconds
@@ -34,14 +35,16 @@ HTTP_TIMEOUT=30  # Connection timeout in seconds
 retry_count=0
 while [ $retry_count -le $MAX_RETRIES ]; do
     # HTTP request with timeout and follow redirects
-    http_status=$(curl -s -o "$OUTPUT_FILE" \
+    http_status=$(curl -s -o "$TEMP_FILE" \
         -w "%{http_code}" \
         --max-time $HTTP_TIMEOUT \
         -L "$TARGET_URL")
         
     # [VALIDATION PIPELINE]
     if [ "$http_status" -eq 200 ]; then
-        if jq -e . "$OUTPUT_FILE" >/dev/null 2>&1; then
+        if jq -e . "$TEMP_FILE" >/dev/null 2>&1; then
+            mv $TEMP_FILE $OUTPUT_FILE
+            rm -f "$TEMP_FILE" 
             echo "Success: Valid JSON persisted to $OUTPUT_FILE"
             exit 0
         else
@@ -63,5 +66,5 @@ done
 
 # [FAILURE HANDLING]
 echo "Critical Error: Max retries ($MAX_RETRIES) exceeded" >&2
-rm -f "$OUTPUT_FILE"  # Cleanup invalid output
+rm -f "$TEMP_FILE"  # Cleanup invalid output
 exit 2
