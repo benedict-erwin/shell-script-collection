@@ -1,0 +1,96 @@
+# =====================
+# Temporary Files
+# =====================
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.log
+*.cache
+*.pid
+*.seed
+*.old
+*.orig
+
+# =====================
+# OS-specific files
+# =====================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# =====================
+# Editor/IDE files
+# =====================
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (IntelliJ, GoLand, etc.)
+.idea/
+*.iml
+out/
+
+# Vim
+*.swp
+*.swo
+
+# Emacs
+*~
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# =====================
+# Dependency & Build folders
+# =====================
+node_modules/
+dist/
+build/
+temp/
+tmp/
+.cache/
+.venv/
+env/
+venv/
+__pycache__/
+target/
+bin/
+obj/
+coverage/
+.nyc_output/
+.parcel-cache/
+
+# =====================
+# Logs and Reports
+# =====================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+tsconfig.tsbuildinfo
+coverage/
+*.log
+*.test-result.xml
+
+# =====================
+# Miscellaneous
+# =====================
+*.lock
+*.gz
+*.zip
+*.tar
+*.tgz
+*.rar
+*.7z
