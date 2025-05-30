@@ -18,6 +18,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Set timezone
+get_datetime() {
+    DATETIME_TZ=$(TZ=Asia/Jakarta printf "%s.%03d" "$(date +"%F %T")" "$((10#$(date +%N) / 1000000))")
+}
+
 # Function to display help
 show_help() {
     echo "Mailinabox User Management Script"
@@ -32,6 +37,7 @@ show_help() {
     echo "  list                    Display active mail users only"
     echo "  list-inactive           Display inactive mail users only"
     echo "  list-all                Display all mail users (active and inactive)"
+    echo "  list-debug              For debuging list command"
     echo "  add EMAIL PASSWORD      Add new user"
     echo "  remove EMAIL            Remove user"
     echo "  add-admin EMAIL         Add admin privilege to user"
@@ -43,9 +49,21 @@ show_help() {
     echo "  batch-remove CSV_FILE   Remove multiple users from CSV"
     echo ""
     echo "CSV FORMAT:"
-    echo "  email,password"
-    echo "  test1@mail.com,str0ngP@ssWd"
-    echo "  test2@mail.com,an0th3rP@ss"
+    echo "  For individual passwords:"
+    echo "    email,password"
+    echo "    test1@mail.com,str0ngP@ssWd"
+    echo "    test2@mail.com,an0th3rP@ss"
+    echo ""
+    echo "  For batch password mode (with --use-batch-password):"
+    echo "    email"
+    echo "    test1@mail.com"
+    echo "    test2@mail.com"
+    echo ""
+    echo "  For batch remove (accepts both formats):"
+    echo "    email                    OR    email,password"
+    echo "    test1@mail.com                 test1@mail.com,anypassword"
+    echo "    test2@mail.com                 test2@mail.com,anypassword"
+    echo "    (password column ignored)      (password column ignored)"
     echo ""
     echo "EXAMPLES:"
     echo "  $0 -u https://your-mailinabox-domain.com -a admin@domain.com -p secret123 list"
@@ -54,23 +72,29 @@ show_help() {
     echo "  $0 -u https://your-mailinabox-domain.com -a admin@domain.com -p secret123 add user@domain.com password123"
     echo "  $0 -u https://your-mailinabox-domain.com -a admin@domain.com -p secret123 batch-add users.csv"
     echo "  $0 -u https://your-mailinabox-domain.com -a admin@domain.com -p secret123 batch-add users.csv --use-batch-password samepass123"
+    echo "  $0 -u https://your-mailinabox-domain.com -a admin@domain.com -p secret123 batch-add emails-only.csv --use-batch-password samepass123"
+    echo "  $0 -u https://your-mailinabox-domain.com -a admin@domain.com -p secret123 batch-remove emails-only.csv"
 }
 
 # Logging functions
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    get_datetime
+    echo -e "${NC}$DATETIME_TZ ${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    get_datetime
+    echo -e "${NC}$DATETIME_TZ ${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    get_datetime
+    echo -e "${NC}$DATETIME_TZ ${YELLOW}[WARNING]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    get_datetime
+    echo -e "${NC}$DATETIME_TZ ${RED}[ERROR]${NC} $1"
 }
 
 # Function to validate configuration
@@ -138,9 +162,7 @@ list_users() {
     log_success "Active Mail Users List:"
     
     # Get all active users
-    echo "$response" | jq -r '.[] | .users[] | select(.status == "active") | "ACTIVE: \(.email) - \(.status)"' | while IFS='|' read -r email status privileges; do
-        echo "$email - Status: $status - Privileges: $privileges"
-    done
+    echo "$response" | jq -r '.[] | .users[] | select(.status == "active") | "ACTIVE: \(.email) - \(.status)"'
 }
 
 # Function to display inactive users only
@@ -164,15 +186,8 @@ list_inactive_users() {
     
     log_success "Inactive Mail Users List:"
     
-    local found_inactive=false
-    
     # Get all inactive users
-    echo "$response" | jq -r '.[] | .users[] | select(.status == "inactive") | "INACTIVE: \(.email) - \(.status)"' | while IFS='|' read -r email status privileges; do
-        echo "$email - Status: $status - Privileges: $privileges"
-    done
-    
-    # Note: This approach won't show "No inactive users found" due to subshell limitation
-    # But it will work for filtering
+    echo "$response" | jq -r '.[] | .users[] | select(.status == "inactive") | "INACTIVE: \(.email) - \(.status)"'
 }
 
 # Function to display all users (active and inactive)
@@ -197,9 +212,7 @@ list_all_users() {
     log_success "All Mail Users List:"
     
     # Get all users without filtering
-    echo "$response" | jq -r '.[] | .users[] | "Email: " + .email + " | Status: " + .status + " | Privileges: " + (.privileges | join(", "))' | while IFS='|' read -r email status privileges; do
-        echo "$email - Status: $status - Privileges: $privileges"
-    done
+    echo "$response" | jq -r '.[] | .users[] | "Email: " + .email + " | Status: " + .status + " | Privileges: " + (.privileges | join(", "))'
 }
 
 # Function to debug user list filtering
@@ -368,18 +381,29 @@ remove_admin_privilege() {
 # Function to validate CSV file
 validate_csv() {
     local csv_file=$1
+    local check_password_header=${2:-true}  # Default to true if not specified
     
     if [[ ! -f "$csv_file" ]]; then
         log_error "CSV file not found: $csv_file"
         return 1
     fi
     
-    # Check CSV header
+    # Check CSV header based on use-batch-password flag
     local header
     header=$(head -n 1 "$csv_file")
-    if [[ "$header" != "email,password" ]]; then
-        log_error "Invalid CSV format. Header must be: email,password"
-        return 1
+    
+    if [[ "$check_password_header" == true ]]; then
+        # Standard mode: require email,password header
+        if [[ "$header" != "email,password" ]]; then
+            log_error "Invalid CSV format. Header must be: email,password"
+            return 1
+        fi
+    else
+        # Batch password mode: only require email header
+        if [[ "$header" != "email" ]]; then
+            log_error "Invalid CSV format for batch password mode. Header must be: email"
+            return 1
+        fi
     fi
     
     # Check if there's data
@@ -397,8 +421,17 @@ validate_csv() {
 batch_add_users() {
     local csv_file=$1
     
-    if ! validate_csv "$csv_file"; then
-        return 1
+    # Check if batch password mode is enabled
+    if [[ "$USE_BATCH_PASSWORD" == true ]]; then
+        log_info "Using batch password mode. CSV only needs 'email' header."
+        if ! validate_csv "$csv_file" false; then  # Don't check password header
+            return 1
+        fi
+    else
+        log_info "Using individual passwords from CSV."
+        if ! validate_csv "$csv_file" true; then   # Check password header
+            return 1
+        fi
     fi
     
     log_info "Starting batch add users from: $csv_file"
@@ -407,42 +440,68 @@ batch_add_users() {
     local error_count=0
     local line_num=1
     
-    # Skip header and process each line
-    tail -n +2 "$csv_file" | while IFS=',' read -r email password; do
-        ((line_num++))
+    # Process CSV based on mode
+    if [[ "$USE_BATCH_PASSWORD" == true ]]; then
+        # Batch password mode: CSV has only email column
+        log_info "Processing emails with batch password: $BATCH_PASSWORD"
         
-        # Trim whitespace
-        email=$(echo "$email" | xargs)
-        password=$(echo "$password" | xargs)
+        # Use while read without pipe to avoid subshell
+        while IFS=',' read -r email; do
+            ((line_num++))
+            
+            # Trim whitespace
+            email=$(echo "$email" | xargs)
+            
+            # Skip empty lines
+            if [[ -z "$email" ]]; then
+                log_warning "Line $line_num: Empty email, skipped"
+                continue
+            fi
+            
+            # Use batch password for all users
+            if add_user "$email" "$BATCH_PASSWORD"; then
+                ((success_count++))
+            else
+                ((error_count++))
+            fi
+            
+            # Small delay to avoid rate limiting
+            sleep 0.5
+        done < <(tail -n +2 "$csv_file")
         
-        # Skip empty lines
-        if [[ -z "$email" ]]; then
-            log_warning "Line $line_num: Empty email, skipped"
-            continue
-        fi
-        
-        # Use batch password if set
-        if [[ "$USE_BATCH_PASSWORD" == true ]]; then
-            password="$BATCH_PASSWORD"
-        fi
-        
-        # Validate password
-        if [[ -z "$password" ]]; then
-            log_error "Line $line_num: Empty password for $email"
-            ((error_count++))
-            continue
-        fi
-        
-        # Add user
-        if add_user "$email" "$password"; then
-            ((success_count++))
-        else
-            ((error_count++))
-        fi
-        
-        # Small delay to avoid rate limiting
-        sleep 0.5
-    done
+    else
+        # Individual password mode: CSV has email,password columns
+        while IFS=',' read -r email password; do
+            ((line_num++))
+            
+            # Trim whitespace
+            email=$(echo "$email" | xargs)
+            password=$(echo "$password" | xargs)
+            
+            # Skip empty lines
+            if [[ -z "$email" ]]; then
+                log_warning "Line $line_num: Empty email, skipped"
+                continue
+            fi
+            
+            # Validate password
+            if [[ -z "$password" ]]; then
+                log_error "Line $line_num: Empty password for $email"
+                ((error_count++))
+                continue
+            fi
+            
+            # Add user with individual password
+            if add_user "$email" "$password"; then
+                ((success_count++))
+            else
+                ((error_count++))
+            fi
+            
+            # Small delay to avoid rate limiting
+            sleep 0.5
+        done < <(tail -n +2 "$csv_file")
+    fi
     
     log_info "Batch add completed. Success: $success_count, Failed: $error_count"
 }
@@ -451,18 +510,45 @@ batch_add_users() {
 batch_remove_users() {
     local csv_file=$1
     
-    if ! validate_csv "$csv_file"; then
+    if [[ ! -f "$csv_file" ]]; then
+        log_error "CSV file not found: $csv_file"
+        return 1
+    fi
+    
+    # Check CSV header - accept both formats for remove
+    local header
+    header=$(head -n 1 "$csv_file")
+    
+    local csv_format=""
+    if [[ "$header" == "email" ]]; then
+        csv_format="email_only"
+        log_info "CSV format: email only"
+    elif [[ "$header" == "email,password" ]]; then
+        csv_format="email_password"
+        log_info "CSV format: email,password (password column will be ignored)"
+    else
+        log_error "Invalid CSV format for batch remove. Header must be either 'email' or 'email,password'"
+        log_error "Found header: '$header'"
+        return 1
+    fi
+    
+    # Check if there's data
+    local line_count
+    line_count=$(wc -l < "$csv_file")
+    if [[ $line_count -lt 2 ]]; then
+        log_error "CSV is empty or contains only header"
         return 1
     fi
     
     log_info "Starting batch remove users from: $csv_file"
+    log_info "Only email addresses will be processed for removal."
     
     local success_count=0
     local error_count=0
     local line_num=1
     
-    # Skip header and process each line
-    tail -n +2 "$csv_file" | while IFS=',' read -r email password; do
+    # Process CSV - read only email column regardless of format
+    while IFS=',' read -r email rest; do
         ((line_num++))
         
         # Trim whitespace
@@ -474,7 +560,7 @@ batch_remove_users() {
             continue
         fi
         
-        # Remove user
+        # Remove user (ignore password column if present)
         if remove_user "$email"; then
             ((success_count++))
         else
@@ -483,7 +569,7 @@ batch_remove_users() {
         
         # Small delay to avoid rate limiting
         sleep 0.5
-    done
+    done < <(tail -n +2 "$csv_file")
     
     log_info "Batch remove completed. Success: $success_count, Failed: $error_count"
 }
@@ -508,11 +594,6 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_help
             exit 0
-            ;;
-        --use-batch-password)
-            USE_BATCH_PASSWORD=true
-            BATCH_PASSWORD="$2"
-            shift 2
             ;;
         *)
             break
@@ -586,7 +667,23 @@ case "$COMMAND" in
             log_error "Usage: $0 batch-add CSV_FILE [--use-batch-password PASSWORD]"
             exit 1
         fi
-        batch_add_users "$1"
+        
+        # Get CSV file
+        csv_file="$1"
+        shift
+        
+        # Parse remaining arguments for --use-batch-password
+        while [[ $# -gt 0 ]]; do
+            if [[ "$1" == "--use-batch-password" ]]; then
+                USE_BATCH_PASSWORD=true
+                BATCH_PASSWORD="$2"
+                shift 2
+            else
+                shift
+            fi
+        done
+        
+        batch_add_users "$csv_file"
         ;;
     batch-remove)
         if [[ $# -lt 1 ]]; then
