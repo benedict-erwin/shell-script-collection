@@ -124,6 +124,68 @@ sudo journalctl -u your-service-name.service -f
 sudo journalctl -u your-service-name.service --since "1 hour ago"
 ```
 
+## When to Use Systemd vs Cron
+
+### **Long-running Scripts (Recommended: Systemd)**
+Use systemd for scripts that run continuously:
+- Monitoring scripts with `while true` loops
+- Daemon processes
+- Services that need automatic restart on failure
+- Scripts requiring complex dependency management
+
+**Example:** CPU/memory monitoring, log watchers, API servers
+
+### **Oneshot Scripts (Alternative: Cron)**
+For simple periodic tasks, **cron might be simpler** than systemd:
+
+**Systemd approach (more complex):**
+```ini
+# my-script.service
+[Unit]
+Description=My Periodic Task
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/my-script.sh
+
+# my-script.timer  
+[Unit]
+Description=Run My Script Every 5 Minutes
+[Timer]
+OnCalendar=*:0/5
+[Install]
+WantedBy=timers.target
+```
+
+**Cron approach (simpler):**
+```bash
+# Edit crontab: crontab -e
+# Run every 5 minutes
+*/5 * * * * /usr/local/bin/my-script.sh "namespace" "/dev/root"
+
+# Run every hour
+0 * * * * /usr/local/bin/backup-script.sh
+
+# Run daily at 2 AM
+0 2 * * * /usr/local/bin/cleanup-script.sh
+```
+
+### **When to Choose Cron:**
+- ✅ Simple periodic execution (minimum 1 minute intervals)
+- ✅ Script runs quickly and exits
+- ✅ No complex dependencies
+- ✅ Standard scheduling patterns
+- ✅ Easier to configure and understand
+
+### **When to Choose Systemd:**
+- ✅ Sub-minute intervals (seconds-level precision)
+- ✅ Complex dependency management
+- ✅ Need detailed logging and monitoring
+- ✅ Integration with other systemd services
+- ✅ Advanced restart policies
+- ✅ Resource management (CPU/memory limits)
+
+**Recommendation:** For simple oneshot scripts like disk usage monitoring that run every few minutes, **cron is often the better choice** due to its simplicity.
+
 ## Configuration Options Explained
 
 ### [Unit] Section
@@ -146,7 +208,7 @@ sudo journalctl -u your-service-name.service --since "1 hour ago"
   - `always`: Always restart
   - `on-failure`: Restart only on failure
   - `no`: Never restart
-- **RestartSec**: Seconds to wait before restarting
+- **RestartSec**: Seconds to wait before restarting (NOT a scheduling interval - only applies when service fails/crashes)
 - **User/Group**: User and group to run the service as
 - **WorkingDirectory**: Working directory for the service
 - **Environment**: Environment variables
@@ -296,6 +358,70 @@ WantedBy=multi-user.target
 - **Limit file access**: Use appropriate WorkingDirectory and file permissions
 - **Environment isolation**: Set only necessary environment variables
 - **Log management**: Configure appropriate log rotation for service output
+
+## Cron vs Systemd Timer Examples
+
+### **Disk Usage Monitoring (Oneshot)**
+
+**Option 1: Cron (Recommended for simplicity)**
+```bash
+# Edit user crontab
+crontab -e
+
+# Add line for every 5 minutes
+*/5 * * * * /usr/local/bin/disk-usage.sh "production" "/dev/root" 2>&1 | logger
+
+# Or system-wide cron
+sudo vim /etc/cron.d/disk-usage
+*/5 * * * * root /usr/local/bin/disk-usage.sh "production" "/dev/root"
+```
+
+**Option 2: Systemd Timer (More complex but more features)**
+```ini
+# /etc/systemd/system/disk-usage.service
+[Unit]
+Description=Disk Usage Monitor
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/disk-usage.sh "production" "/dev/root"
+User=root
+
+# /etc/systemd/system/disk-usage.timer
+[Unit]
+Description=Run Disk Usage Monitor every 5 minutes
+Requires=disk-usage.service
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
+# Enable and start timer
+sudo systemctl enable disk-usage.timer
+sudo systemctl start disk-usage.timer
+```
+
+### **CPU Memory Monitoring (Long-running)**
+
+**Only Systemd (Cron not suitable for continuous processes)**
+```ini
+[Unit]
+Description=CPU and Memory Usage Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cpu-mem-usage.sh "production"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ## Best Practices
 
