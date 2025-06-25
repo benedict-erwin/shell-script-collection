@@ -47,9 +47,35 @@
 # Date: 2024-10-03
 
 # Get label from param
-label="DISK-USAGE-INFO"
 ns=$1
 sl=$2
+label="DISK-USAGE-INFO"
+
+# Validate parameters
+if [ -z "$ns" ]; then
+    echo "Error: Namespace parameter is required" >&2
+    echo "Usage: $0 \"your-namespace\" \"/dev/root\"" >&2
+    exit 1
+fi
+
+if [ -z "$sl" ]; then
+    echo "Error: Selected disk parameter is required" >&2
+    echo "Usage: $0 \"your-namespace\" \"/dev/root\"" >&2
+    exit 1
+fi
+
+# Check if jq is installed
+if ! command -v jq &> /dev/null; then
+    echo "Error: jq is required but not installed" >&2
+    echo "Install it using: sudo apt-get install jq (Ubuntu/Debian) or sudo yum install jq (CentOS/RHEL)" >&2
+    exit 1
+fi
+
+# Check if logger is available
+if ! command -v logger &> /dev/null; then
+    echo "Error: logger command is required but not available" >&2
+    exit 1
+fi
 
 # Get the current timestamp
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%NZ")
@@ -104,3 +130,6 @@ json_output=$(jq -c -n \
 
 # Write the JSON output to syslog
 logger -t "${label,,}" "$json_output"
+
+# Normal exit
+exit 0
